@@ -10,6 +10,11 @@ build/
 *.png
 *.jpeg
 *.jpg
+*.pdf
+!assets/*.png
+!assets/*.jpeg
+!assets/*.jpg
+!assets/*.pdf
 ~/.cache/kartli/
 .idea/
 .vscode/

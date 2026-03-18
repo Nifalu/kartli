@@ -1,14 +1,35 @@
 [project]
 name = "kartli"
 version = "0.1.0"
-description = "Generate static map images with Swisstopo and OpenStreetMap tiles"
+description = "Generate static map images with Swisstopo, OpenStreetMap, and ESRI satellite tiles"
 readme = "README.md"
 requires-python = ">=3.12"
 license = "MIT"
+authors = [
+    { name = "Nico Bachmann", email = "nifalu@users.noreply.github.com" },
+]
+classifiers = [
+    "Development Status :: 5 - Production/Stable",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Scientific/Engineering :: GIS",
+    "Topic :: Multimedia :: Graphics",
+    "Environment :: Console",
+    "Typing :: Typed",
+]
+keywords = ["map", "static-map", "swisstopo", "openstreetmap", "tiles", "gis"]
 dependencies = [
     "Pillow>=11.0",
     "httpx>=0.28",
 ]
+
+[project.urls]
+Homepage = "https://github.com/Nifalu/kartli"
+Repository = "https://github.com/Nifalu/kartli"
+Issues = "https://github.com/Nifalu/kartli/issues"
 
 [project.scripts]
 kartli = "kartli.cli:main"
