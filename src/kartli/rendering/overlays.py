@@ -139,7 +139,7 @@ class AreaOverlay(Overlay):
             return
 
         alpha = int(self.area.opacity * 255)
-        fill_rgba = _parse_color_with_alpha(self.area.fill_color, alpha)
+        fill_rgba = _parse_color_with_alpha(self.area.color, alpha)
         overlay = Image.new("RGBA", image.size, (0, 0, 0, 0))
         overlay_draw = ImageDraw.Draw(overlay)
         overlay_draw.polygon(points, fill=fill_rgba)
@@ -147,7 +147,7 @@ class AreaOverlay(Overlay):
         image.alpha_composite(overlay)
 
         draw = ImageDraw.Draw(image)
-        stroke_rgba = _parse_color_with_alpha(self.area.stroke_color, 200)
+        stroke_rgba = _parse_color_with_alpha(self.area.color, 200)
         for i in range(len(points)):
             p1 = points[i]
             p2 = points[(i + 1) % len(points)]
@@ -160,6 +160,42 @@ class AreaOverlay(Overlay):
             _draw_text_with_outline(
                 draw, (cx, cy), self.area.label, font=font, fill="black"
             )
+
+
+def _interpolate_polyline(
+    points: list[tuple[int, int]], t: float
+) -> tuple[float, float, float]:
+    """Interpolate a point at fraction t along a polyline.
+
+    Returns (x, y, angle_radians) where angle is the direction of the
+    segment at that point.
+    """
+    import math
+
+    segments = []
+    total = 0.0
+    for i in range(len(points) - 1):
+        dx = points[i + 1][0] - points[i][0]
+        dy = points[i + 1][1] - points[i][1]
+        length = math.hypot(dx, dy)
+        segments.append((length, dx, dy))
+        total += length
+
+    if total == 0:
+        return float(points[0][0]), float(points[0][1]), 0.0
+
+    target = t * total
+    acc = 0.0
+    for i, (length, dx, dy) in enumerate(segments):
+        if acc + length >= target or i == len(segments) - 1:
+            frac = (target - acc) / length if length > 0 else 0.0
+            x = points[i][0] + dx * frac
+            y = points[i][1] + dy * frac
+            angle = math.atan2(dy, dx)
+            return x, y, angle
+        acc += length
+
+    return float(points[-1][0]), float(points[-1][1]), 0.0
 
 
 class LineOverlay(Overlay):
@@ -183,6 +219,45 @@ class LineOverlay(Overlay):
         ]
         draw = ImageDraw.Draw(image)
         draw.line(points, fill=self.line.color, width=self.line.width, joint="curve")
+
+        if self.line.label:
+            import math
+
+            font = _get_font(13)
+            x, y, angle = _interpolate_polyline(points, self.line.label_position)
+
+            # Flip angle so text is never upside-down
+            if angle > math.pi / 2:
+                angle -= math.pi
+            elif angle < -math.pi / 2:
+                angle += math.pi
+
+            txt_img = Image.new("RGBA", image.size, (0, 0, 0, 0))
+            txt_draw = ImageDraw.Draw(txt_img)
+
+            bbox = font.getbbox(self.line.label)
+            tw = bbox[2] - bbox[0]
+            th = bbox[3] - bbox[1]
+
+            # Draw at origin, then rotate
+            cx, cy = image.size[0] // 2, image.size[1] // 2
+            label_x = cx - tw // 2
+            label_y = cy - th // 2 - self.line.width - 4
+
+            _draw_text_with_outline(
+                txt_draw, (label_x, label_y), self.line.label, font=font, fill="black"
+            )
+
+            txt_img = txt_img.rotate(
+                -math.degrees(angle), center=(cx, cy), resample=Image.BICUBIC
+            )
+
+            # Translate: shift so the center lands on (x, y)
+            dx = int(x) - cx
+            dy = int(y) - cy
+            shifted = Image.new("RGBA", image.size, (0, 0, 0, 0))
+            shifted.paste(txt_img, (dx, dy))
+            image.alpha_composite(shifted)
 
 
 _NICE_DISTANCES = [

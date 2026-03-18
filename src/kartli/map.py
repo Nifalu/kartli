@@ -46,26 +46,100 @@ class Map:
         self._scale: int | None = None
         self._show_scalebar = show_scalebar
 
-    def add_marker(self, marker: Marker) -> None:
+    # -- Object model methods (accept pre-built dataclasses) --
+
+    def add_marker(self, marker: Marker) -> Map:
+        """Add a pre-built Marker object."""
         self._objects.markers.append(marker)
+        return self
 
-    def add_area(self, area: Area) -> None:
+    def add_area(self, area: Area) -> Map:
+        """Add a pre-built Area object."""
         self._objects.areas.append(area)
+        return self
 
-    def add_line(self, line: Line) -> None:
+    def add_line(self, line: Line) -> Map:
+        """Add a pre-built Line object."""
         self._objects.lines.append(line)
+        return self
 
-    def set_center(self, lat: float, lon: float, zoom: int | None = None) -> None:
+    # -- Convenience constructors (build objects inline) --
+
+    def marker(
+        self,
+        lat: float,
+        lon: float,
+        *,
+        label: str = "",
+        color: str = "red",
+        size: int = 8,
+    ) -> Map:
+        """Add a marker at the given coordinates."""
+        self._objects.markers.append(
+            Marker(coord=(lat, lon), label=label, color=color, size=size)
+        )
+        return self
+
+    def area(
+        self,
+        coords: list[tuple[float, float]],
+        *,
+        label: str = "",
+        color: str = "red",
+        opacity: float = 0.3,
+        stroke_width: int = 2,
+    ) -> Map:
+        """Add a polygon area from a list of (lat, lon) tuples."""
+        self._objects.areas.append(
+            Area(
+                coords=coords,
+                label=label,
+                color=color,
+                opacity=opacity,
+                stroke_width=stroke_width,
+            )
+        )
+        return self
+
+    def line(
+        self,
+        coords: list[tuple[float, float]],
+        *,
+        color: str = "blue",
+        width: int = 3,
+        label: str = "",
+        label_position: float = 0.5,
+    ) -> Map:
+        """Add a line from a list of (lat, lon) tuples."""
+        self._objects.lines.append(
+            Line(
+                coords=coords,
+                color=color,
+                width=width,
+                label=label,
+                label_position=label_position,
+            )
+        )
+        return self
+
+    # -- Configuration --
+
+    def set_center(self, lat: float, lon: float, zoom: int | None = None) -> Map:
+        """Set the map center. Optionally set zoom at the same time."""
         self._center = Coord(lat=lat, lon=lon)
         if zoom is not None:
             self._zoom = zoom
+        return self
 
-    def set_zoom(self, zoom: int) -> None:
+    def set_zoom(self, zoom: int) -> Map:
+        """Set the zoom level explicitly."""
         self._zoom = zoom
+        return self
 
-    def set_scale(self, scale: int) -> None:
+    def set_scale(self, scale: int) -> Map:
         """Set zoom via map scale denominator, e.g. 25000 for 1:25'000."""
         self._scale = scale
+        return self
 
     def _resolve_tile_source(self) -> TileSource:
         if self._tile_source is not None:
@@ -103,6 +177,11 @@ class Map:
     def render(self, output: str | Path | None = None) -> Image.Image:
         """Render the map and optionally save to a file. Returns the PIL Image."""
         source = self._resolve_tile_source()
+
+        coords = self._objects.all_coords()
+        if coords:
+            source.validate_coords(coords)
+
         projection = source.projection
         center, zoom = self._resolve_center_zoom(projection)
         tile_size = source.tile_size
@@ -134,6 +213,11 @@ class Map:
         rgb_image = image.convert("RGB")
 
         if output is not None:
-            rgb_image.save(str(output), "PNG")
+            out_path = Path(output)
+            fmt = out_path.suffix.lower()
+            if fmt == ".pdf":
+                rgb_image.save(str(out_path), "PDF", resolution=150)
+            else:
+                rgb_image.save(str(out_path), "PNG")
 
         return rgb_image

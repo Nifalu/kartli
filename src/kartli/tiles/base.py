@@ -1,8 +1,12 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
+from typing import TYPE_CHECKING
 
 from kartli.rendering.projection import Projection, WebMercatorProjection
+
+if TYPE_CHECKING:
+    from kartli.models import Coord
 
 
 class TileSource(ABC):
@@ -52,3 +56,9 @@ class TileSource(ABC):
     def cache_prefix(self) -> str:
         """Prefix for cache directory, defaults to source name."""
         return self.name.lower().replace(" ", "_")
+
+    def validate_coords(self, coords: list[Coord]) -> None:  # noqa: B027
+        """Check that coordinates are within this source's coverage.
+
+        Override in subclasses with geographic bounds. Default: no-op.
+        """

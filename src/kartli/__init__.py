@@ -2,7 +2,7 @@
 
 from kartli.cache import DiskCache, NoCache, TileCache
 from kartli.map import Map
-from kartli.models import Area, Coord, Line, Marker
+from kartli.models import Area, Coord, CoordinateError, Line, Marker
 from kartli.rendering.overlays import Overlay
 from kartli.rendering.projection import Projection, WebMercatorProjection
 from kartli.tiles.base import TileSource
@@ -13,6 +13,7 @@ from kartli.tiles.swisstopo import SwisstopoTiles
 __all__ = [
     "Area",
     "Coord",
+    "CoordinateError",
     "DiskCache",
     "EsriSatelliteTiles",
     "Line",

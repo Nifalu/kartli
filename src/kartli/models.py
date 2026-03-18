@@ -3,10 +3,22 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 
 
+class CoordinateError(ValueError):
+    """Raised when coordinates are invalid."""
+
+
 @dataclass(frozen=True)
 class Coord:
     lat: float
     lon: float
+
+    def __post_init__(self):
+        if not -90 <= self.lat <= 90:
+            msg = f"Invalid latitude {self.lat}: must be between -90 and 90"
+            raise CoordinateError(msg)
+        if not -180 <= self.lon <= 180:
+            msg = f"Invalid longitude {self.lon}: must be between -180 and 180"
+            raise CoordinateError(msg)
 
     def __iter__(self):
         yield self.lat
@@ -29,8 +41,7 @@ class Marker:
 class Area:
     coords: list[tuple[float, float] | Coord]
     label: str = ""
-    fill_color: str = "red"
-    stroke_color: str = ""
+    color: str = "red"
     opacity: float = 0.3
     stroke_width: int = 2
 
@@ -38,8 +49,6 @@ class Area:
         self.coords = [
             c if isinstance(c, Coord) else Coord(*c) for c in self.coords
         ]
-        if not self.stroke_color:
-            self.stroke_color = self.fill_color
 
 
 @dataclass
@@ -47,11 +56,15 @@ class Line:
     coords: list[tuple[float, float] | Coord]
     color: str = "blue"
     width: int = 3
+    label: str = ""
+    label_position: float = 0.5
+    """Position of the label along the line, from 0.0 (start) to 1.0 (end)."""
 
     def __post_init__(self):
         self.coords = [
             c if isinstance(c, Coord) else Coord(*c) for c in self.coords
         ]
+        self.label_position = max(0.0, min(1.0, self.label_position))
 
 
 @dataclass
