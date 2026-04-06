@@ -81,6 +81,20 @@ m.set_scale(25_000)  # 1:25'000
 
 Or omit both — zoom is auto-computed to fit all markers/areas/lines.
 
+### Swiss LV95 coordinates
+
+Use `Coord.from_lv95()` to work with Swiss LV95 (EPSG:2056) coordinates directly.
+The original values are preserved to avoid precision loss in coordinate conversions.
+
+```python
+from kartli import Coord, Map
+
+m = Map()
+m.add_marker(Marker(coord=Coord.from_lv95(2600072, 1199545), label="Bern"))
+m.set_center(Coord.from_lv95(2600072, 1199545))
+m.render("bern.png")
+```
+
 ### Output
 
 PNG or PDF, detected from extension. `render()` also returns a PIL `Image`:
@@ -120,6 +134,13 @@ kartli render \
   --center 46.948,7.448 \
   --scale 1:50000 \
   -o map.pdf
+
+# Swiss LV95 coordinates
+kartli render \
+  --lv95 \
+  --center 2600072,1199545 \
+  --marker 2600072,1199545,Bern \
+  -o bern.png
 ```
 
 ### Tile sources
@@ -142,6 +163,7 @@ kartli render \
 | `--marker LAT,LON[,LABEL]` | Add marker (repeatable) |
 | `--area LAT,LON;LAT,LON;...` | Add polygon (repeatable) |
 | `--line LAT,LON;LAT,LON;...` | Add line (repeatable) |
+| `--lv95` | Interpret all coordinates as LV95 East,North (EPSG:2056) |
 | `--size WxH` | Image size in pixels (default: `800x600`) |
 | `--no-scalebar` | Hide the scale bar |
 | `-o FILE` | Output file (`.png` or `.pdf`, default: `map.png`) |

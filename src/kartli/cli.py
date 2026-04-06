@@ -2,9 +2,12 @@ from __future__ import annotations
 
 import argparse
 import sys
+from functools import partial
+from pathlib import Path
 
 from kartli.map import Map
-from kartli.models import Area, Line, Marker
+from kartli.models import Area, Coord, Line, Marker
+from kartli.sharing import generate_qr
 from kartli.tiles.esri import EsriSatelliteTiles
 from kartli.tiles.osm import OsmTiles
 from kartli.tiles.swisstopo import SwisstopoTiles
@@ -83,8 +86,18 @@ def _build_parser() -> argparse.ArgumentParser:
         help="Tile source (default: auto-detect)",
     )
     render.add_argument(
+        "--lv95", action="store_true",
+        help="Interpret coordinates as LV95 East,North (EPSG:2056) "
+        "instead of WGS84 lat,lon",
+    )
+    render.add_argument(
         "--no-scalebar", action="store_true",
         help="Disable the scale bar overlay",
+    )
+    render.add_argument(
+        "--share", action="store_true",
+        help="Upload drawing to swisstopo and generate a shareable URL, "
+        "QR code ({output}_qr.png), and URL file ({output}_url.txt)",
     )
     render.add_argument(
         "--output", "-o", type=str, default="map.png", help="Output file",
@@ -98,6 +111,28 @@ def _parse_scale(value: str) -> int:
     if ":" in cleaned:
         cleaned = cleaned.split(":")[1]
     return int(cleaned)
+
+
+def _make_coord(a: float, b: float, *, lv95: bool) -> Coord:
+    if lv95:
+        return Coord.from_lv95(a, b)
+    return Coord(lat=a, lon=b)
+
+
+def _handle_share(m: Map, output: str) -> None:
+    try:
+        result = m.share_online()
+    except ValueError as e:
+        print(f"Error: {e}", file=sys.stderr)  # noqa: T201
+        sys.exit(1)
+    out = Path(output)
+    url_path = out.with_name(f"{out.stem}_url.txt")
+    qr_path = out.with_name(f"{out.stem}_qr.png")
+    url_path.write_text(result.url + "\n")
+    generate_qr(result.url, qr_path)
+    print(f"URL saved to {url_path}")  # noqa: T201
+    print(f"QR code saved to {qr_path}")  # noqa: T201
+    print(f"Open in browser: {result.url}")  # noqa: T201
 
 
 def main(argv: list[str] | None = None) -> None:
@@ -119,17 +154,21 @@ def main(argv: list[str] | None = None) -> None:
         show_scalebar=not args.no_scalebar,
     )
 
+    coord = partial(_make_coord, lv95=args.lv95)
+
     for s in args.marker:
-        lat, lon, label = _parse_coord_label(s)
-        m.add_marker(Marker(coord=(lat, lon), label=label))
+        a, b, label = _parse_coord_label(s)
+        m.add_marker(Marker(coord=coord(a, b), label=label))
     for s in args.area:
-        m.add_area(Area(coords=_parse_coord_list(s)))
+        raw = _parse_coord_list(s)
+        m.add_area(Area(coords=[coord(a, b) for a, b in raw]))
     for s in args.line:
-        m.add_line(Line(coords=_parse_coord_list(s)))
+        raw = _parse_coord_list(s)
+        m.add_line(Line(coords=[coord(a, b) for a, b in raw]))
 
     if args.center:
         parts = args.center.split(",")
-        m.set_center(float(parts[0]), float(parts[1]))
+        m.set_center(coord(float(parts[0]), float(parts[1])))
     if args.zoom:
         m.set_zoom(args.zoom)
     elif args.scale:
@@ -137,6 +176,9 @@ def main(argv: list[str] | None = None) -> None:
 
     m.render(args.output)
     print(f"Map saved to {args.output}")  # noqa: T201
+
+    if args.share:
+        _handle_share(m, args.output)
 
 
 if __name__ == "__main__":

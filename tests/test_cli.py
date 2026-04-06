@@ -131,6 +131,20 @@ def test_parser_no_scalebar_flag():
     assert args.no_scalebar is True
 
 
+def test_parser_lv95_flag():
+    parser = _build_parser()
+    args = parser.parse_args([
+        "render", "--lv95", "--center", "2600072,1199545"
+    ])
+    assert args.lv95 is True
+
+
+def test_parser_lv95_default_false():
+    parser = _build_parser()
+    args = parser.parse_args(["render", "--center", "46.948,7.447"])
+    assert args.lv95 is False
+
+
 def test_parser_defaults():
     parser = _build_parser()
     args = parser.parse_args(["render", "--center", "46.948,7.447"])

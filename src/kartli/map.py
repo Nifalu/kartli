@@ -13,6 +13,7 @@ from kartli.rendering.projection import (
     zoom_for_scale,
 )
 from kartli.rendering.stitcher import stitch_tiles
+from kartli.sharing import ShareResult, share
 from kartli.tiles.base import TileSource
 from kartli.tiles.osm import OsmTiles
 from kartli.tiles.swisstopo import SwisstopoTiles
@@ -124,9 +125,20 @@ class Map:
 
     # -- Configuration --
 
-    def set_center(self, lat: float, lon: float, zoom: int | None = None) -> Map:
-        """Set the map center. Optionally set zoom at the same time."""
-        self._center = Coord(lat=lat, lon=lon)
+    def set_center(
+        self,
+        lat_or_coord: float | Coord,
+        lon: float | None = None,
+        zoom: int | None = None,
+    ) -> Map:
+        """Set the map center. Accepts (lat, lon) or a Coord object."""
+        if isinstance(lat_or_coord, Coord):
+            self._center = lat_or_coord
+        else:
+            if lon is None:
+                msg = "lon is required when passing lat as a float"
+                raise TypeError(msg)
+            self._center = Coord(lat=lat_or_coord, lon=lon)
         if zoom is not None:
             self._zoom = zoom
         return self
@@ -140,6 +152,31 @@ class Map:
         """Set zoom via map scale denominator, e.g. 25000 for 1:25'000."""
         self._scale = scale
         return self
+
+    def share_online(self) -> ShareResult:
+        """Upload map objects as KML to swisstopo and return a shareable URL.
+
+        Resolves center and zoom the same way render() does, then uploads
+        all markers, areas, and lines as a KML drawing.
+
+        Raises ValueError if any coordinates are outside Switzerland,
+        since the swisstopo viewer only covers Swiss territory.
+        """
+        coords = self._objects.all_coords()
+        non_swiss = [c for c in coords if not _is_swiss(c)]
+        if non_swiss:
+            msg = (
+                "--share is only compatible with coordinates inside Switzerland. "
+                f"Found {len(non_swiss)} coordinate(s) outside Swiss bounds "
+                f"(lat {_SWISS_LAT[0]}-{_SWISS_LAT[1]}, "
+                f"lon {_SWISS_LON[0]}-{_SWISS_LON[1]})."
+            )
+            raise ValueError(msg)
+
+        source = self._resolve_tile_source()
+        projection = source.projection
+        center, zoom = self._resolve_center_zoom(projection)
+        return share(self._objects, center, zoom)
 
     def _resolve_tile_source(self) -> TileSource:
         if self._tile_source is not None:

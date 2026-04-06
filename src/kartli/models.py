@@ -11,6 +11,8 @@ class CoordinateError(ValueError):
 class Coord:
     lat: float
     lon: float
+    lv95_east: float | None = field(default=None, repr=False, compare=False)
+    lv95_north: float | None = field(default=None, repr=False, compare=False)
 
     def __post_init__(self):
         if not -90 <= self.lat <= 90:
@@ -23,6 +25,18 @@ class Coord:
     def __iter__(self):
         yield self.lat
         yield self.lon
+
+    @classmethod
+    def from_lv95(cls, east: float, north: float) -> Coord:
+        """Create a Coord from Swiss LV95 (EPSG:2056) easting/northing.
+
+        The original LV95 values are preserved on the returned Coord
+        to avoid precision loss in roundtrip conversions.
+        """
+        from kartli.coordinates import lv95_to_wgs84
+
+        lat, lon = lv95_to_wgs84(east, north)
+        return cls(lat=lat, lon=lon, lv95_east=east, lv95_north=north)
 
 
 @dataclass
