@@ -132,27 +132,82 @@ def snap_to_standard_scale(
     return best
 
 
+def _pixel_bounds(
+    bbox: "BBox",  # noqa: UP037, F821
+    label_extents: "list[AnchoredExtent] | None",  # noqa: UP037, F821
+    zoom: int,
+    tile_size: int,
+    projection: Projection,
+) -> tuple[float, float, float, float]:
+    """Pixel bounding rectangle (min_x, max_x, min_y, max_y) covering the
+    coord bbox plus each label extent at the given zoom."""
+    tl = projection.coord_to_pixel(
+        Coord(lat=bbox.max_lat, lon=bbox.min_lon), zoom, tile_size
+    )
+    br = projection.coord_to_pixel(
+        Coord(lat=bbox.min_lat, lon=bbox.max_lon), zoom, tile_size
+    )
+    min_x, max_x = min(tl[0], br[0]), max(tl[0], br[0])
+    min_y, max_y = min(tl[1], br[1]), max(tl[1], br[1])
+
+    for ext in label_extents or []:
+        px, py = projection.coord_to_pixel(ext.coord, zoom, tile_size)
+        min_x = min(min_x, px + ext.dx_min)
+        max_x = max(max_x, px + ext.dx_max)
+        min_y = min(min_y, py + ext.dy_min)
+        max_y = max(max_y, py + ext.dy_max)
+
+    return min_x, max_x, min_y, max_y
+
+
 def auto_zoom(
     bbox: "BBox",  # noqa: UP037, F821
     width: int,
     height: int,
     tile_size: int = 256,
     projection: Projection | None = None,
+    label_extents: "list[AnchoredExtent] | None" = None,  # noqa: UP037, F821
 ) -> int:
-    """Compute the best zoom to fit a bounding box in the given dimensions."""
+    """Compute the best zoom to fit a bounding box in the given dimensions.
+
+    When `label_extents` is provided, the chosen zoom also keeps each
+    label's pixel footprint inside the canvas, so wider labels force a
+    lower zoom instead of being clipped at the edges.
+    """
     if projection is None:
         projection = WebMercatorProjection()
 
     for zoom in range(18, 0, -1):
-        tl = projection.coord_to_pixel(
-            Coord(lat=bbox.max_lat, lon=bbox.min_lon), zoom, tile_size
+        min_x, max_x, min_y, max_y = _pixel_bounds(
+            bbox, label_extents, zoom, tile_size, projection
         )
-        br = projection.coord_to_pixel(
-            Coord(lat=bbox.min_lat, lon=bbox.max_lon), zoom, tile_size
-        )
-        dx = abs(br[0] - tl[0])
-        dy = abs(br[1] - tl[1])
+        dx = max_x - min_x
+        dy = max_y - min_y
         padding = 0.8
         if dx <= width * padding and dy <= height * padding:
             return zoom
     return 1
+
+
+def auto_center(
+    bbox: "BBox",  # noqa: UP037, F821
+    zoom: int,
+    tile_size: int = 256,
+    projection: Projection | None = None,
+    label_extents: "list[AnchoredExtent] | None" = None,  # noqa: UP037, F821
+) -> Coord:
+    """Center coord that balances the coord bbox and any label extents.
+
+    Falls back to the coord bbox center when no label extents are given,
+    so it matches the pre-label behavior."""
+    if projection is None:
+        projection = WebMercatorProjection()
+    if not label_extents:
+        return bbox.center
+
+    min_x, max_x, min_y, max_y = _pixel_bounds(
+        bbox, label_extents, zoom, tile_size, projection
+    )
+    cx = (min_x + max_x) / 2
+    cy = (min_y + max_y) / 2
+    return projection.pixel_to_coord(cx, cy, zoom, tile_size)

@@ -6,9 +6,12 @@ from PIL import Image
 
 from kartli.cache import DiskCache, TileCache
 from kartli.models import Area, Coord, Line, MapObjects, Marker
+from kartli.rendering.layout import compute_label_extents
 from kartli.rendering.overlays import ScaleBarOverlay, build_overlays
+from kartli.rendering.placement import place_marker_labels
 from kartli.rendering.projection import (
     Projection,
+    auto_center,
     auto_zoom,
     zoom_for_scale,
 )
@@ -36,6 +39,7 @@ class Map:
         height: int = 600,
         cache: TileCache | None = None,
         show_scalebar: bool = True,
+        label_font_size: int = 13,
     ):
         self._tile_source = tile_source
         self._width = width
@@ -46,6 +50,7 @@ class Map:
         self._zoom: int | None = None
         self._scale: int | None = None
         self._show_scalebar = show_scalebar
+        self._label_font_size = label_font_size
 
     # -- Object model methods (accept pre-built dataclasses) --
 
@@ -193,21 +198,42 @@ class Map:
         zoom = self._zoom
 
         bbox = self._objects.bbox()
-        if center is None:
-            if bbox is not None:
-                center = bbox.center
-            else:
-                msg = "No center set and no objects to auto-compute center from"
-                raise ValueError(msg)
+        label_extents = (
+            compute_label_extents(self._objects, self._label_font_size)
+            if bbox is not None
+            else []
+        )
 
         if zoom is None and self._scale is not None:
-            zoom = zoom_for_scale(self._scale, center.lat)
+            lat_anchor = center or (bbox.center if bbox else None)
+            if lat_anchor is None:
+                msg = "No center set and no objects to anchor scale from"
+                raise ValueError(msg)
+            zoom = zoom_for_scale(self._scale, lat_anchor.lat)
 
         if zoom is None:
             if bbox is not None:
-                zoom = auto_zoom(bbox, self._width, self._height)
+                zoom = auto_zoom(
+                    bbox,
+                    self._width,
+                    self._height,
+                    projection=projection,
+                    label_extents=label_extents,
+                )
             else:
                 zoom = 15
+
+        if center is None:
+            if bbox is not None:
+                center = auto_center(
+                    bbox,
+                    zoom,
+                    projection=projection,
+                    label_extents=label_extents,
+                )
+            else:
+                msg = "No center set and no objects to auto-compute center from"
+                raise ValueError(msg)
 
         return center, zoom
 
@@ -235,10 +261,20 @@ class Map:
             projection=projection,
         )
 
+        marker_placements = place_marker_labels(
+            self._objects.markers,
+            font_size=self._label_font_size,
+            zoom=zoom,
+            tile_size=tile_size,
+            projection=projection,
+        )
+
         overlays = build_overlays(
             self._objects.markers,
             self._objects.areas,
             self._objects.lines,
+            label_font_size=self._label_font_size,
+            marker_placements=marker_placements,
         )
         for overlay in overlays:
             overlay.draw(image, origin_x, origin_y, zoom, tile_size, projection)

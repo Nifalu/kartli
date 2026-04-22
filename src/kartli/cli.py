@@ -42,6 +42,21 @@ def _parse_coord_list(value: str) -> list[tuple[float, float]]:
     return coords
 
 
+def _parse_coord_list_with_label(
+    value: str,
+) -> tuple[list[tuple[float, float]], str]:
+    """Parse 'LAT1,LON1;LAT2,LON2;...[|LABEL]' into (coords, label).
+
+    The trailing `|LABEL` suffix is optional; without it, the label is "".
+    """
+    if "|" in value:
+        coords_str, label = value.split("|", 1)
+        label = label.strip()
+    else:
+        coords_str, label = value, ""
+    return _parse_coord_list(coords_str), label
+
+
 _TILE_SOURCES = {
     "swisstopo": SwisstopoTiles,
     "swisstopo-satellite": lambda: SwisstopoTiles(layer="ch.swisstopo.swissimage"),
@@ -72,11 +87,13 @@ def _build_parser() -> argparse.ArgumentParser:
     )
     render.add_argument(
         "--area", action="append", default=[],
-        metavar="LAT1,LON1;LAT2,LON2;...", help="Add a polygon area",
+        metavar="LAT1,LON1;LAT2,LON2;...[|LABEL]",
+        help="Add a polygon area; optional |LABEL suffix for a text label",
     )
     render.add_argument(
         "--line", action="append", default=[],
-        metavar="LAT1,LON1;LAT2,LON2;...", help="Add a line",
+        metavar="LAT1,LON1;LAT2,LON2;...[|LABEL]",
+        help="Add a line; optional |LABEL suffix for a text label",
     )
     render.add_argument(
         "--size", type=str, default="800x600", help="Image size WxH",
@@ -93,6 +110,10 @@ def _build_parser() -> argparse.ArgumentParser:
     render.add_argument(
         "--no-scalebar", action="store_true",
         help="Disable the scale bar overlay",
+    )
+    render.add_argument(
+        "--label-font-size", type=int, default=13,
+        help="Font size for marker/area/line labels (default: 13)",
     )
     render.add_argument(
         "--share", action="store_true",
@@ -152,6 +173,7 @@ def main(argv: list[str] | None = None) -> None:
         width=width,
         height=height,
         show_scalebar=not args.no_scalebar,
+        label_font_size=args.label_font_size,
     )
 
     coord = partial(_make_coord, lv95=args.lv95)
@@ -160,11 +182,11 @@ def main(argv: list[str] | None = None) -> None:
         a, b, label = _parse_coord_label(s)
         m.add_marker(Marker(coord=coord(a, b), label=label))
     for s in args.area:
-        raw = _parse_coord_list(s)
-        m.add_area(Area(coords=[coord(a, b) for a, b in raw]))
+        raw, label = _parse_coord_list_with_label(s)
+        m.add_area(Area(coords=[coord(a, b) for a, b in raw], label=label))
     for s in args.line:
-        raw = _parse_coord_list(s)
-        m.add_line(Line(coords=[coord(a, b) for a, b in raw]))
+        raw, label = _parse_coord_list_with_label(s)
+        m.add_line(Line(coords=[coord(a, b) for a, b in raw], label=label))
 
     if args.center:
         parts = args.center.split(",")

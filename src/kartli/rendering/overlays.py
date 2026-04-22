@@ -84,8 +84,15 @@ def _parse_color_with_alpha(color: str, alpha: int) -> tuple[int, int, int, int]
 
 
 class MarkerOverlay(Overlay):
-    def __init__(self, marker: Marker):
+    def __init__(
+        self,
+        marker: Marker,
+        label_font_size: int = 13,
+        label_direction: "LabelDirection | None" = None,  # noqa: UP037, F821
+    ):
         self.marker = marker
+        self.label_font_size = label_font_size
+        self.label_direction = label_direction
 
     def draw(
         self,
@@ -96,6 +103,8 @@ class MarkerOverlay(Overlay):
         tile_size: int,
         projection: Projection,
     ) -> None:
+        from kartli.rendering.placement import LabelDirection, label_anchor
+
         cx, cy = _coord_to_canvas(
             self.marker.coord, origin_x, origin_y, zoom, tile_size, projection
         )
@@ -108,10 +117,14 @@ class MarkerOverlay(Overlay):
             width=2,
         )
         if self.marker.label:
-            font = _get_font(13)
+            font = _get_font(self.label_font_size)
+            left, top, right, bottom = font.getbbox(self.marker.label)
+            tw, th = right - left, bottom - top
+            direction = self.label_direction or LabelDirection.E
+            anchor = label_anchor(direction, cx, cy, r, tw, th)
             _draw_text_with_outline(
                 draw,
-                (cx + r + 4, cy - r),
+                anchor,
                 self.marker.label,
                 font=font,
                 fill="black",
@@ -119,8 +132,9 @@ class MarkerOverlay(Overlay):
 
 
 class AreaOverlay(Overlay):
-    def __init__(self, area: Area):
+    def __init__(self, area: Area, label_font_size: int = 13):
         self.area = area
+        self.label_font_size = label_font_size
 
     def draw(
         self,
@@ -156,7 +170,7 @@ class AreaOverlay(Overlay):
         if self.area.label:
             cx = sum(p[0] for p in points) // len(points)
             cy = sum(p[1] for p in points) // len(points)
-            font = _get_font(13)
+            font = _get_font(self.label_font_size)
             _draw_text_with_outline(
                 draw, (cx, cy), self.area.label, font=font, fill="black"
             )
@@ -199,8 +213,9 @@ def _interpolate_polyline(
 
 
 class LineOverlay(Overlay):
-    def __init__(self, line: Line):
+    def __init__(self, line: Line, label_font_size: int = 13):
         self.line = line
+        self.label_font_size = label_font_size
 
     def draw(
         self,
@@ -223,7 +238,7 @@ class LineOverlay(Overlay):
         if self.line.label:
             import math
 
-            font = _get_font(13)
+            font = _get_font(self.label_font_size)
             x, y, angle = _interpolate_polyline(points, self.line.label_position)
 
             # Flip angle so text is never upside-down
@@ -355,12 +370,21 @@ def build_overlays(
     markers: list[Marker],
     areas: list[Area],
     lines: list[Line],
+    label_font_size: int = 13,
+    marker_placements: "dict[int, LabelDirection] | None" = None,  # noqa: UP037, F821
 ) -> list[Overlay]:
+    marker_placements = marker_placements or {}
     overlays: list[Overlay] = []
     for a in areas:
-        overlays.append(AreaOverlay(a))
+        overlays.append(AreaOverlay(a, label_font_size=label_font_size))
     for ln in lines:
-        overlays.append(LineOverlay(ln))
-    for m in markers:
-        overlays.append(MarkerOverlay(m))
+        overlays.append(LineOverlay(ln, label_font_size=label_font_size))
+    for i, m in enumerate(markers):
+        overlays.append(
+            MarkerOverlay(
+                m,
+                label_font_size=label_font_size,
+                label_direction=marker_placements.get(i),
+            )
+        )
     return overlays

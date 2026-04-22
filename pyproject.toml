@@ -1,6 +1,6 @@
 [project]
 name = "kartli"
-version = "0.2.0"
+version = "0.3.0"
 description = "Generate static map images with Swisstopo, OpenStreetMap, and ESRI satellite tiles"
 readme = "README.md"
 requires-python = ">=3.12"

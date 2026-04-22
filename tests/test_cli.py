@@ -6,6 +6,7 @@ from kartli.cli import (
     _build_parser,
     _parse_coord_label,
     _parse_coord_list,
+    _parse_coord_list_with_label,
     _parse_scale,
     _parse_size,
 )
@@ -88,6 +89,42 @@ def test_parse_coord_list_single():
     assert len(coords) == 1
 
 
+# --- _parse_coord_list_with_label ---
+
+
+def test_parse_coord_list_with_label_no_label():
+    coords, label = _parse_coord_list_with_label("46.948,7.447;47.0,8.0")
+    assert len(coords) == 2
+    assert label == ""
+
+
+def test_parse_coord_list_with_label_simple():
+    coords, label = _parse_coord_list_with_label("46.948,7.447;47.0,8.0|Route A")
+    assert len(coords) == 2
+    assert label == "Route A"
+
+
+def test_parse_coord_list_with_label_strips_whitespace():
+    _, label = _parse_coord_list_with_label("46.948,7.447;47.0,8.0|  Route A  ")
+    assert label == "Route A"
+
+
+def test_parse_coord_list_with_label_handles_umlauts():
+    _, label = _parse_coord_list_with_label(
+        "46.948,7.447;47.0,8.0|Schiessstand Süd"
+    )
+    assert label == "Schiessstand Süd"
+
+
+def test_parse_coord_list_with_label_pipe_in_label_kept():
+    """`split('|', 1)` splits on the first pipe, so pipes inside the
+    label are preserved."""
+    _, label = _parse_coord_list_with_label(
+        "46.948,7.447;47.0,8.0|A|B"
+    )
+    assert label == "A|B"
+
+
 # --- _parse_scale ---
 
 
@@ -154,3 +191,12 @@ def test_parser_defaults():
     assert args.zoom is None
     assert args.scale is None
     assert args.no_scalebar is False
+    assert args.label_font_size == 13
+
+
+def test_parser_label_font_size():
+    parser = _build_parser()
+    args = parser.parse_args([
+        "render", "--label-font-size", "20", "--center", "46.948,7.447"
+    ])
+    assert args.label_font_size == 20

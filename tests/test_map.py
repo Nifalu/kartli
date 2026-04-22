@@ -1,7 +1,13 @@
 import pytest
 
 from kartli.map import Map, _is_swiss
-from kartli.models import Coord, CoordinateError, Marker
+from kartli.models import Area, Coord, CoordinateError, Line, Marker
+from kartli.rendering.overlays import (
+    AreaOverlay,
+    LineOverlay,
+    MarkerOverlay,
+    build_overlays,
+)
 from kartli.tiles.esri import EsriSatelliteTiles
 from kartli.tiles.osm import OsmTiles
 from kartli.tiles.swisstopo import SwisstopoTiles
@@ -196,3 +202,35 @@ def test_scalebar_default_on():
 def test_scalebar_disabled():
     m = Map(show_scalebar=False)
     assert m._show_scalebar is False
+
+
+# --- Label font size ---
+
+
+def test_label_font_size_default():
+    m = Map()
+    assert m._label_font_size == 13
+
+
+def test_label_font_size_custom():
+    m = Map(label_font_size=20)
+    assert m._label_font_size == 20
+
+
+def test_build_overlays_propagates_font_size():
+    marker = Marker(coord=(46.948, 7.447), label="m")
+    area = Area(coords=[(46.9, 7.4), (46.95, 7.4), (46.95, 7.45)], label="a")
+    line = Line(coords=[(46.9, 7.4), (46.95, 7.45)], label="l")
+
+    overlays = build_overlays([marker], [area], [line], label_font_size=18)
+
+    by_type = {type(o): o for o in overlays}
+    assert by_type[MarkerOverlay].label_font_size == 18
+    assert by_type[AreaOverlay].label_font_size == 18
+    assert by_type[LineOverlay].label_font_size == 18
+
+
+def test_build_overlays_default_font_size():
+    marker = Marker(coord=(46.948, 7.447), label="m")
+    overlays = build_overlays([marker], [], [])
+    assert overlays[0].label_font_size == 13
